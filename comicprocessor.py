@@ -13,27 +13,12 @@ import mozjpeg_lossless_optimization
 
 MULTI_PROCESSING = True
 
-PALETTE = [
-    0x00, 0x00, 0x00,
-    0x11, 0x11, 0x11,
-    0x22, 0x22, 0x22,
-    0x33, 0x33, 0x33,
-    0x44, 0x44, 0x44,
-    0x55, 0x55, 0x55,
-    0x66, 0x66, 0x66,
-    0x77, 0x77, 0x77,
-    0x88, 0x88, 0x88,
-    0x99, 0x99, 0x99,
-    0xaa, 0xaa, 0xaa,
-    0xbb, 0xbb, 0xbb,
-    0xcc, 0xcc, 0xcc,
-    0xdd, 0xdd, 0xdd,
-    0xee, 0xee, 0xee,
-    0xff, 0xff, 0xff,
-]
+EINK_COLOR = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]
+PALETTE_BW = [value for c in EINK_COLOR for value in [c, c, c]]
+PALETTE_C = [value for r in EINK_COLOR for g in EINK_COLOR for b in EINK_COLOR for value in [r, g, b]]
 
-PAL_IMG = Image.new('P', (1, 1))
-PAL_IMG.putpalette(PALETTE)
+PAL_IMG_BW = Image.new('P', (1, 1))
+PAL_IMG_BW.putpalette(PALETTE_BW)
 
 
 class ComicProcessor:
@@ -43,7 +28,7 @@ class ComicProcessor:
     """
 
     def __init__(self, dir=1, merge=True, merge_pct=0.15, merge_contrast=0.25, crop_border='default', gamma=1.8,
-                 split='both', split_overlap=True, resize=None):
+                 split='both', split_overlap=True, resize=None, color=False):
         self.options = {
             'dir': dir,
             'merge': merge,
@@ -53,7 +38,8 @@ class ComicProcessor:
             'gamma': gamma,
             'split': split,
             'split_overlap': split_overlap,
-            'resize': resize
+            'resize': resize,
+            'color': color,
         }
 
         self.page_map = []
@@ -206,7 +192,8 @@ def process_pass_2(options, output_dir, quality, f0, f1, bounding, pages):
         im0 = im_new
 
     # First, convert to floating point (greyscale)
-    im0 = im0.convert('F', dither=Image.Dither.FLOYDSTEINBERG)
+    if not options['color']:
+        im0 = im0.convert('F', dither=Image.Dither.FLOYDSTEINBERG)
 
     # Do cropping
     im0 = bbox_crop(im0, bounding)
@@ -217,12 +204,14 @@ def process_pass_2(options, output_dir, quality, f0, f1, bounding, pages):
     if len(ims) != len(pages):
         raise Exception('Number of pages and resulting images not equal')
 
+    # Grammar correction, auto contrast, and quantize
     for i in range(len(ims)):
-        # Do gamma correction
-        ims[i] = color_gamma_correction(ims[i], options['gamma'])
-
-        # Quantize
-        ims[i] = color_quantize(ims[i])
+        if options['color']:
+            ims[i] = color_gamma_correction_c(ims[i], options['gamma'])
+            ims[i] = color_quantize_c(ims[i])
+        else:
+            ims[i] = color_gamma_correction_bw(ims[i], options['gamma'])
+            ims[i] = color_quantize_bw(ims[i])
 
     images_list = []
     for i in range(len(ims)):
@@ -366,8 +355,8 @@ def bbox_crop(img, bbox):
     return img.crop(bbox)
 
 
-# Gamma correction
-def color_gamma_correction(image, gamma):
+# Gamma correction for bw images
+def color_gamma_correction_bw(image, gamma):
     data = np.array(image.getdata())
     data = np.divide(data, 255)
     data = np.clip(data, 0, 1)
@@ -382,13 +371,25 @@ def color_gamma_correction(image, gamma):
     return image
 
 
-# Quantize color to 16-bit greyscale
-def color_quantize(img):
+# Gamma optimization for color images
+def color_gamma_correction_c(image, gamma):
+    # Nothing for now
+    return image
+
+
+# Quantize color to 4-bit greyscale
+def color_quantize_bw(img):
     img = img.convert('L')
     img = img.convert('RGB')
-    img = img.quantize(colors=len(PALETTE) / 3, palette=PAL_IMG, dither=Image.Dither.FLOYDSTEINBERG)
+    img = img.quantize(colors=len(PALETTE_BW) / 3, palette=PAL_IMG_BW, dither=Image.Dither.FLOYDSTEINBERG)
     img = img.convert('RGB')
 
+    return img
+
+
+# Quantize color to 4096-color
+def color_quantize_c(img):
+    # Nothing for now
     return img
 
 
@@ -400,7 +401,10 @@ def image_do_resize(img, size):
     if size is None:
         return img
 
-    return ImageOps.pad(img, size, Image.Resampling.LANCZOS, color=255.0, centering=(0.5, 0.5))
+    if img.mode == 'F':
+        return ImageOps.pad(img, size, Image.Resampling.LANCZOS, color=255.0, centering=(0.5, 0.5))
+    else:
+        return ImageOps.pad(img, size, Image.Resampling.LANCZOS, color=(255, 255, 255), centering=(0.5, 0.5))
 
 
 # Split and resize page to final size

@@ -582,6 +582,9 @@ def write_as_epub(book, output):
             opf += '\t\t<meta name="primary-writing-mode" content="vertical-rl"/>\n'
         opf += '\t\t<meta name="fixed-layout" content="true"/>\n'
         opf += '\t\t<meta name="orientation-lock" content="none"/>\n'
+        opf += '\t\t<meta property="rendition:orientation">portrait</meta>\n'
+        opf += '\t\t<meta property="rendition:spread">landscape</meta>\n'
+        opf += '\t\t<meta property="rendition:layout">pre-paginated</meta>\n'
         opf += '\t\t<meta name="original-resolution" content="{}x{}"/>\n'.format(w, h)
         if book.metadata.series:
             opf += '\t\t<meta name="calibre:series" content="{}"/>\n'.format(escape(book.metadata.series))

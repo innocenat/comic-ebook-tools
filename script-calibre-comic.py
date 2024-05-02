@@ -21,6 +21,7 @@ Usage:
                    is read from the source file.
 --format=FORMAT    Output format. PDF or CBZ or EPUB (default)
 
+--color            Retain color
 --no-process       Disable image processing
 --width, --height  Target image width. Default is 1404 by 1872 (7.8" 300ppi).
                    Only if image processing is enabled.
@@ -38,6 +39,7 @@ def main(ids):
     height = 1872
     library = None
     rtl = False
+    color = False
     quality = 60
     image_processing = True
     output_format = 'EPUB'
@@ -67,7 +69,9 @@ def main(ids):
             rtl = True
         elif k == 'ltr':
             rtl = False
-        elif k == 'no-processing':
+        elif k == 'color':
+            color = True
+        elif k == 'no-process':
             image_processing = False
         elif k == 'quality':
             quality = int(v)
@@ -125,7 +129,7 @@ def main(ids):
 
         if image_processing:
             print('Processing...')
-            processor = comicprocessor.ComicProcessor(dir=book.direction, resize=(width, height))
+            processor = comicprocessor.ComicProcessor(dir=book.direction, resize=(width, height), color=color)
             output = comicbook.process_comic(book, processor, quality)
         else:
             output = book
